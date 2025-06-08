@@ -9,29 +9,46 @@ import pandas as pd
 
 
 
-@dag(start_date=datetime(2025, 6, 7), catchup=False)
+@dag(start_date=datetime(2025, 6, 7), catchup=False, tags=["ETL"])
 
-def extract_dag():
-
-    @task
+def etl():
 
     # Extraction:
+    @task
 
-    def extract_data():
-
+    def extract_crime():
         crime_df = pd.read_csv("/usr/local/airflow/include/Crime_Data_from_2020_to_Present_20250607.csv", usecols=["Vict Age", "Vict Sex", "Vict Descent", "Date Rptd", "DATE OCC", "Weapon Used Cd", "AREA NAME", "Rpt Dist No", "LOCATION", "Crm Cd Desc", "Weapon Desc", "Status Desc"]) # crime data
-        crime_df.to_csv("/usr/local/airflow/include/_extracted_crime_data.csv", index=False)
         print('success')
+        return crime_df
 
+    @task
+    def extract_homeless():
         homeless_df = pd.read_excel("/usr/local/airflow/include/2020-homeless-count-data-by-census-tract.xlsx", usecols=["City","Community_Name","totPeople"]) # homeless data
-        homeless_df.to_csv("/usr/local/airflow/include/_extracted_homeless_data.csv", index=False)
         print('success')
+        return homeless_df
     
-    extract_data()
+    @task
+    def transform_to_dim_bezdomni(data):
+        pass
+
+    @task
+    def transform_to_dim_terytorium(data):
+        pass
+
+    @task
+    def transform_to_facts():
+        pass
+    
+    crime_data = extract_crime()
+    homeless_data = extract_homeless()
+    dim_bezdomni = transform_to_dim_bezdomni(homeless_data)
+    dim_terytorium = transform_to_dim_terytorium(crime_data)
+    facts = transform_to_facts(crime_data)
+
+etl()
 
 
 
-extract_dag = extract_dag()
 
 # Victim:
 
