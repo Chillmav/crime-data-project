@@ -5,11 +5,12 @@ import pandas as pd
 
 
 
+@dag(start_date=datetime(2025, 6, 7), 
+     catchup=False, 
+     default_args={"owner": "Astro", "retries": 3},
+     schedule ='@monthly', 
+     tags=["ETL"])
 
-
-
-
-@dag(start_date=datetime(2025, 6, 7), catchup=False, tags=["ETL"])
 
 def etl():
 
@@ -29,14 +30,33 @@ def etl():
     
     @task
     def transform_to_dim_bezdomni(data):
-        pass
+        bezdomni = pd.DataFrame(columns=['id_bezdomni', "liczba_bezdomnych", "poz_bezdomnosci"])
+        bezdomni["liczba_bezdomnych"] = data["to_people"]
+        bezdomni["id_bezdomni"] = bezdomni.index + 1
+        bezdomni["poz_bezdomnosci"] = "niski"
+        bezdomni["poz_bezdomnosci"].where(bezdomni["poz_bezdomnosci"] > 2000, "średni")
+        bezdomni["poz_bezdomnosci"].where(bezdomni["poz_bezdomnosci"] > 10000, "duży")
+        return bezdomni
 
     @task
     def transform_to_dim_terytorium(data):
-        pass
+        terytorium = data["AreaName", "Rpt Dist No", "LOCATION"]
+        terytorium.dropna()
+        terytorium.rename(columns={"AreaName": "Obszar", "Rpt Dist No": "Dzielnica", "LOCATION": "Ulica"})
+        terytorium.drop_duplicates(inplace=True)
+        area_dist = terytorium["Obszar", "Dzielnica"].drop_duplicates()
+        code_to_name = {}
+        terytorium["Dzielnica"] = terytorium["Dzielnica"].map(code_to_name)
+        area_dist.insert(2, "Ulica", 'nieznana')
+        area = terytorium["Obszar"].drop_duplicates()
+        area.insert(1, "Dzielnica", "nieznana")
+        area.insert(2,"Ulica", "nieznana")
+        terytorium = pd.concat([terytorium, area_dist, area, pd.DataFrame(["nieznany", "nieznana", "nieznana"], columns=terytorium.columns)])
+        return terytorium
 
     @task
     def transform_to_facts():
+        
         pass
     
     crime_data = extract_crime()
@@ -48,9 +68,6 @@ def etl():
 etl()
 
 
-
-
-# Victim:
 
 
 
