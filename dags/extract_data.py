@@ -233,13 +233,13 @@ def etl():
                     "tydzień": date.isocalendar().week,
                     "kwartał": (date.month - 1) // 3 + 1,
                     "dzień": dni_po_polsku[date.day_name()],
-                    "dzień_roboczy": "False" # funkcja do sprawdzenia
+                    "dzień_roboczy": "False", # funkcja do sprawdzenia
                     "pora_dnia": pora
                 })
                 id_counter += 1
 
         data = pd.DataFrame(rows, columns=columns)
-        data = pd.concat([pd.DataFrame([[1, "nieznany", "nieznany", "nieznany", "nieznany", "nieznany", "nieznana"]], columns=data.columns), data])
+        data = pd.concat([pd.DataFrame([[1, "nieznany", "nieznany", "nieznany", "nieznany", "nieznany", "nieznana", "nieznana"]], columns=data.columns), data])
 
 
         return data
