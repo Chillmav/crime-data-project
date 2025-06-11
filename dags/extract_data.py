@@ -72,7 +72,7 @@ def etl():
         area = area.to_frame()
         area.insert(1, "Dzielnica", "nieznana")
         area.insert(2,"Ulica", "nieznana")
-        terytorium["id_terytorium"] = terytorium.index + 1
+        terytorium["id_terytorium"] = terytorium.index + 2
         terytorium = pd.concat([pd.DataFrame([["nieznany", 0, "nieznana", 1]], columns=terytorium.columns), terytorium, area_dist, area])
 
         
