@@ -50,29 +50,31 @@ def etl():
         data = data.groupby(["area"], as_index=False)["totPeople"].sum()
         data["totPeople"] = data["totPeople"].round(decimals=0)
         data["totPeople"] = data["totPeople"].astype('Int64')
-        bezdomni["liczba_bezdomnych"] = data["tot_people"]
+        bezdomni["liczba_bezdomnych"] = data["totPeople"]
         bezdomni["area"] = data['area']  # area is needed for creating facts table must be dropped before loading to dim table
         bezdomni["id_bezdomni"] = bezdomni.index + 2
         bezdomni["poz_bezdomnosci"] = "niski"
         bezdomni["poz_bezdomnosci"] = bezdomni["poz_bezdomnosci"].where(bezdomni["liczba_bezdomnych"] < 2000, "średni")
         bezdomni["poz_bezdomnosci"] = bezdomni["poz_bezdomnosci"].where(bezdomni["liczba_bezdomnych"] < 5000, "duży")
-        bezdomni = pd.concat([pd.DataFrame([[1, "nieznany", "nieznany", "nieznany"]], columns=bezdomni.columns), bezdomni])
+        bezdomni = pd.concat([pd.DataFrame([[1, 0, "nieznany", "nieznany"]], columns=bezdomni.columns), bezdomni])
 
         return bezdomni
 
     @task
     def transform_to_dim_terytorium(data):
-        terytorium = data["AreaName", "Rpt Dist No", "LOCATION"]
+        terytorium = data[["AREA NAME", "Rpt Dist No", "LOCATION"]]
         terytorium.dropna()
-        terytorium.rename(columns={"AreaName": "Obszar", "Rpt Dist No": "Dzielnica", "LOCATION": "Ulica"}, inplace=True)
+        terytorium.rename(columns={"AREA NAME": "Obszar", "Rpt Dist No": "Dzielnica", "LOCATION": "Ulica"}, inplace=True)
         terytorium.drop_duplicates(inplace=True)
-        area_dist = terytorium["Obszar", "Dzielnica"].drop_duplicates()
+        area_dist = terytorium[["Obszar", "Dzielnica"]].drop_duplicates()
         area_dist.insert(2, "Ulica", 'nieznana')
         area = terytorium["Obszar"].drop_duplicates()
+        area = area.to_frame()
         area.insert(1, "Dzielnica", "nieznana")
         area.insert(2,"Ulica", "nieznana")
-        terytorium = pd.concat([pd.DataFrame([["nieznany", "nieznana", "nieznana"]], columns=terytorium.columns), terytorium, area_dist, area])
         terytorium["id_terytorium"] = terytorium.index + 1
+        terytorium = pd.concat([pd.DataFrame([["nieznany", 0, "nieznana", 1]], columns=terytorium.columns), terytorium, area_dist, area])
+
         
         return terytorium
 
@@ -194,10 +196,10 @@ def etl():
         merged_df = pd.merge(data[["typ", "rodzaj_broni", "status"]], dim_sczegoly_przestepstwa[["id_szczegoly_przestepstwa", "typ", "rodzaj_broni", "status"]], left_on=[[ "typ", "rodzaj_broni", "status"]], right_on=[["typ", "rodzaj_broni", "status"]], how='left')
         merged_df["id_szcegoly_przestepstwa"].fillna(1)
         facts["id_szcegoly_przestepstwa"] = merged_df["id_szcegoly_przestepstwa"]
-        merged_df = pd.merge(data[["AreaName"]], dim_bezdomni[["id_bezdomni", "area"]], left_on=["AreaName"], right_on=["area"], how='left')
+        merged_df = pd.merge(data[["AREA NAME"]], dim_bezdomni[["id_bezdomni", "area"]], left_on=["AREA NAME"], right_on=["area"], how='left')
         merged_df["id_bezdomni"].fillna(1)
         facts["id_bezdomni"] = merged_df["id_bezdomni"]
-        merged_df = pd.merge(data[["AreaName", "Rpt Dist No", "LOCATION"]], dim_terytorium[["id_terytorium", "Obszar", "Dzielnica", "Ulica"]], left_on=[["AreaName", "Rpt Dist No", "LOCATION"]], right_on=[["Obszar", "Dzielnica", "Ulica"]], how='left')
+        merged_df = pd.merge(data[["AREA NAME", "Rpt Dist No", "LOCATION"]], dim_terytorium[["id_terytorium", "Obszar", "Dzielnica", "Ulica"]], left_on=[["AREA NAME", "Rpt Dist No", "LOCATION"]], right_on=[["Obszar", "Dzielnica", "Ulica"]], how='left')
         merged_df["id_terytorium"].fillna(1)
         facts["id_terytorium"] = merged_df["id_terytorium"]
 
@@ -239,7 +241,7 @@ def etl():
                 id_counter += 1
 
         data = pd.DataFrame(rows, columns=columns)
-        data = pd.concat([pd.DataFrame([[1, "nieznany", "nieznany", "nieznany", "nieznany", "nieznany", "nieznana", "nieznana"]], columns=data.columns), data])
+        data = pd.concat([pd.DataFrame([[1, 0, 0, 0, 0, "nieznany", "nieznana", "nieznana"]], columns=data.columns), data])
 
 
         return data
@@ -282,7 +284,7 @@ def etl():
                     index += 1
 
         data = pd.DataFrame(rows, columns=columns)
-        data = pd.concat([pd.DataFrame([[1, "nieznany", "nieznana", "nieznana"]], columns=data.columns), data])
+        data = pd.concat([pd.DataFrame([[1, 0, "nieznana", "nieznana"]], columns=data.columns), data])
 
         return data
 
