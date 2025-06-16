@@ -6,6 +6,7 @@ from plugins.klasyfikuj_typ_przestepstwa import klasyfikuj_typ_przestepstwa
 from plugins.klasyfikuj_rodzaj_broni import klasyfikuj_rodzaj_broni
 from plugins.klasyfikuj_status import klasyfikuj_status
 from plugins.mapowanie_obszarow import community_to_area
+from plugins.sprawdzenie_dzien_roboczy import is_us_weekend_or_holiday
 
 
 @dag(start_date=datetime(2025, 6, 7), 
@@ -21,7 +22,19 @@ def etl():
     @task
 
     def extract_crime():
-        crime_df = pd.read_csv("/usr/local/airflow/include/Crime_Data_from_2020_to_Present_20250612.csv", usecols=["Vict Age", "Vict Sex", "Vict Descent", "Date Rptd", "DATE OCC", "TIME OCC", "Weapon Used Cd", "AREA NAME", "Rpt Dist No", "LOCATION", "Crm Cd Desc", "Weapon Used Cd", "Weapon Desc", "Status Desc"]) # crime data
+        crime_df = pd.read_csv("/usr/local/airflow/include/Crime_Data_from_2020_to_Present_20250612.csv", usecols=["Vict Age", "Vict Sex", "Vict Descent", "Date Rptd", "DATE OCC", "TIME OCC", "AREA NAME", "Rpt Dist No", "LOCATION", "Crm Cd Desc", "Weapon Used Cd", "Weapon Desc", "Status Desc"]) # crime data
+        nan_counts = crime_df.isna().sum()
+        nan_counts.drop(columns=["Weapon Used Cd", "Weapon Desc"], inplace=True)
+        trsh1 = crime_df.shape[0]*0.1
+        trsh2 = crime_df.shape[0]*0.5
+        warn_col = nan_counts[nan_counts > trsh1].index.to_list()
+        nan_col = nan_counts[nan_counts > trsh2].index.to_list()
+        if len(warn_col) > 0:
+            print(f"Kolumny {nan_col} mają więcej niż 10% pustych wartości")
+
+        if len(nan_col) > 0:
+            print(f"Kolumny {nan_col} mają więcej niż 10% pustych wartości")
+
         crime_df.to_csv("/usr/local/airflow/include/_extracted_crime_data.csv", index=False)
         return
 
@@ -30,7 +43,17 @@ def etl():
     def extract_homeless():
 
         homeless_df = pd.read_excel("/usr/local/airflow/include/2020-homeless-count-data-by-census-tract.xlsx", sheet_name="Counts_by_Tract", usecols=["City","Community_Name","totPeople"]) # homeless data
+        nan_counts = homeless_df.isna().sum()
+        nan_counts.drop(columns=["Weapon Used Cd", "Weapon Desc"], inplace=True)
+        trsh1 = homeless_df.shape[0]*0.1
+        trsh2 = homeless_df.shape[0]*0.5
+        warn_col = nan_counts[nan_counts > trsh1].index.to_list()
+        nan_col = nan_counts[nan_counts > trsh2].index.to_list()
+        if len(warn_col) > 0:
+            print(f"Kolumny {nan_col} mają więcej niż 10% pustych wartości")
 
+        if len(nan_col) > 0:
+            print(f"Kolumny {nan_col} mają więcej niż 10% pustych wartości")
         return homeless_df
     
     @task
@@ -205,6 +228,9 @@ def etl():
         merged_df["id_terytorium"].fillna(1)
         facts["id_terytorium"] = merged_df["id_terytorium"]
 
+        if facts.shape[0] != data.shape[0]:
+            print("Nieprawidłowa liczba faktów")
+
         return facts
 
     @task
@@ -237,7 +263,7 @@ def etl():
                     "tydzień": date.isocalendar().week,
                     "kwartał": (date.month - 1) // 3 + 1,
                     "dzień": dni_po_polsku[date.day_name()],
-                    "dzień_roboczy": "False", # funkcja do sprawdzenia
+                    "dzień_roboczy": is_us_weekend_or_holiday(date),
                     "pora_dnia": pora
                 })
                 id_counter += 1
