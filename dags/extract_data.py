@@ -1,5 +1,6 @@
 from airflow.decorators import dag, task
 from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from datetime import datetime
 import pandas as pd
 from plugins.klasyfikuj_typ_przestepstwa import klasyfikuj_typ_przestepstwa
@@ -7,7 +8,8 @@ from plugins.klasyfikuj_rodzaj_broni import klasyfikuj_rodzaj_broni
 from plugins.klasyfikuj_status import klasyfikuj_status
 from plugins.mapowanie_obszarow import community_to_area
 from plugins.sprawdzenie_dzien_roboczy import is_us_weekend_or_holiday
-
+from sqlalchemy import create_engine
+from load_dataframe_to_postgres import load_dataframe_to_postgres
 
 @dag(start_date=datetime(2025, 6, 7), 
      catchup=False, 
@@ -22,7 +24,7 @@ def etl():
     @task
 
     def extract_crime():
-        crime_df = pd.read_csv("/usr/local/airflow/include/Crime_Data_from_2020_to_Present_20250612.csv", usecols=["Vict Age", "Vict Sex", "Vict Descent", "Date Rptd", "DATE OCC", "TIME OCC", "AREA NAME", "Rpt Dist No", "LOCATION", "Crm Cd Desc", "Weapon Used Cd", "Weapon Desc", "Status Desc"]) # crime data
+        crime_df = pd.read_csv("/usr/local/airflow/include/Crime_Data_from_2020_to_Present_20250607.csv", usecols=["Vict Age", "Vict Sex", "Vict Descent", "Date Rptd", "DATE OCC", "TIME OCC", "AREA NAME", "Rpt Dist No", "LOCATION", "Crm Cd Desc", "Weapon Used Cd", "Weapon Desc", "Status Desc"]) # crime data
         nan_counts = crime_df.isna().sum()
         nan_counts.drop(columns=["Weapon Used Cd", "Weapon Desc"], inplace=True)
         trsh1 = crime_df.shape[0]*0.1
@@ -105,6 +107,7 @@ def etl():
 
     @task
     def transform_to_facts(dim_ofiara, dim_terytorium, dim_data, dim_sczegoly_przestepstwa, dim_bezdomni):
+        
         data = pd.read_csv("/usr/local/airflow/include/_extracted_crime_data.csv")
        
         # transform dates to year, month, week, day
@@ -269,7 +272,7 @@ def etl():
                 id_counter += 1
 
         data = pd.DataFrame(rows, columns=columns)
-        data = pd.concat([pd.DataFrame([[1, 0, 0, 0, 0, "nieznany", "nieznana", "nieznana"]], columns=data.columns), data])
+        data = pd.concat([pd.DataFrame([[1, 0, 0, 0, 0, "nieznany", False, "nieznana"]], columns=data.columns), data])
 
 
         return data
@@ -317,6 +320,7 @@ def etl():
         return data
 
     @task
+
     def transform_to_dim_szczegoly_przestepstwa():
 
         data = pd.read_csv("/usr/local/airflow/include/_extracted_crime_data.csv")
@@ -340,6 +344,17 @@ def etl():
 
         return crime_details_dim
 
+    @task 
+    def load_to_database(dim_data, dim_ofiara, dim_szczegoly_przestepstwa, dim_bezdomni, dim_terytorium, facts):
+
+        load_dataframe_to_postgres(dim_data, "Data")
+        load_dataframe_to_postgres(dim_ofiara, "Ofiara")
+        load_dataframe_to_postgres(dim_szczegoly_przestepstwa, "Szczegóły_przestępstwa")
+        load_dataframe_to_postgres(dim_bezdomni, "Bezdomni")
+        load_dataframe_to_postgres(dim_terytorium, "Lokalizacja")
+        load_dataframe_to_postgres(facts, "Fakty_przestępstwa")
+
+        
 
     crime_data = extract_crime()
     homeless_data = extract_homeless()
@@ -350,6 +365,9 @@ def etl():
     dim_terytorium = transform_to_dim_terytorium()
     facts = transform_to_facts(dim_ofiara, dim_terytorium, dim_data, dim_sczegoly_przestepstwa, dim_bezdomni)
     crime_data >> [dim_sczegoly_przestepstwa, dim_terytorium, dim_sczegoly_przestepstwa, dim_ofiara, dim_data]
+
+    load_to_database(dim_data, dim_ofiara, dim_sczegoly_przestepstwa, dim_bezdomni, dim_terytorium, facts)
+    
 
 etl()
 
